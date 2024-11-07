@@ -1,0 +1,99 @@
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import cv2
+import PIL as pl
+import random
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import classification_report
+import tensorflow as tf
+from tensorflow.keras.utils import image_dataset_from_directory, img_to_array
+from tensorflow.keras.models import Sequential, load_model
+from tensorflow.keras.layers import Conv2D, AvgPool2D, MaxPooling2D, Flatten, Dense, Dropout, BatchNormalization
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
+import os
+for dirname, _, filenames in os.walk('/kaggle/input'):
+    for filename in filenames:
+        print(os.path.join(dirname, filename))
+
+import warnings
+warnings.filterwarnings('ignore')
+!nvidia-smi
+
+img = cv2.imread('/kaggle/input/the-iqothnccd-lung-cancer-dataset/The IQ-OTHNCCD lung cancer dataset/Bengin cases/Bengin case (10).jpg')
+plt.title('Bengin Case')
+plt.imshow(img, label = 'Bengin Case')
+
+img = cv2.imread('/kaggle/input/the-iqothnccd-lung-cancer-dataset/The IQ-OTHNCCD lung cancer dataset/Malignant cases/Malignant case (10).jpg')
+plt.title('Malignant Case')
+plt.imshow(img)
+
+img = cv2.imread('/kaggle/input/the-iqothnccd-lung-cancer-dataset/The IQ-OTHNCCD lung cancer dataset/Normal cases/Normal case (100).jpg')
+plt.title('Normal Case')
+plt.imshow(img)
+
+img.shape
+
+dir = '/kaggle/input/the-iqothnccd-lung-cancer-dataset/The IQ-OTHNCCD lung cancer dataset'
+img_width = 256
+img_height = 256
+
+train_data = image_dataset_from_directory(dir,label_mode = "categorical", image_size = (img_height, img_width),batch_size = 16, shuffle = True,seed = 12, validation_split = 0.3, subset = "training")
+test_data = image_dataset_from_directory(dir,label_mode = "categorical", image_size = (img_height, img_width),batch_size = 16, shuffle = True,seed = 12, validation_split = 0.2, subset = "validation")
+val_data = image_dataset_from_directory(dir,label_mode = "categorical", image_size = (img_height, img_width),batch_size = 16, shuffle = True,seed = 12, validation_split = 0.1, subset = "validation")
+
+model = Sequential()
+
+model.add(Conv2D(128, (2, 2), padding = 'same', input_shape = (img_height, img_width, 3), activation = 'relu'))
+model.add(BatchNormalization())
+model.add(AvgPool2D(2,2))
+model.add(Conv2D(128, (3, 3), activation = 'relu', padding = 'same'))
+model.add(Conv2D(128, (3, 3), activation = 'relu', padding = 'same'))
+model.add(BatchNormalization())
+model.add(MaxPooling2D(2,2))
+model.add(Dropout(0.25))
+model.add(Conv2D(128, (3, 3), activation = 'relu', padding = 'same'))
+model.add(Conv2D(128, (3, 3), activation = 'relu', padding = 'same'))
+model.add(BatchNormalization())
+model.add(MaxPooling2D(2,2))
+model.add(Conv2D(64, (3, 3), activation = 'relu', padding = 'same'))
+model.add(Conv2D(64, (3, 3), activation = 'relu', padding = 'same'))
+model.add(BatchNormalization())
+model.add(MaxPooling2D(2,2))
+model.add(Flatten())
+model.add(Dropout(0.2))
+model.add(Dense(3000, activation = 'relu'))
+model.add(Dense(1500, activation = 'relu'))
+model.add(Dense(3, activation = 'softmax'))
+
+adam = Adam(learning_rate = 0.0001)
+
+model.compile(loss = 'categorical_crossentropy', optimizer = adam, metrics = ['accuracy'])
+
+model.summary()
+
+from tensorflow.keras.utils import plot_model
+plot_model(model, to_file='model_plot.png', show_shapes=True, show_layer_names=True)
+
+early_stopping = EarlyStopping(monitor = 'val_accuracy', patience = 5, mode = 'max', verbose = 1)
+path = '/kaggle/working/best.keras'
+checkpoint = ModelCheckpoint(filepath = path, monitor = 'val_accuracy', mode = 'max', save_best_only = True, verbose = 1)
+history = model.fit(train_data, validation_data = val_data, epochs = 100, callbacks = [early_stopping, checkpoint])
+
+best_model = load_model(path)
+loss, acc = best_model.evaluate(test_data)
+
+print(f'\nAccuracy = {acc}\nLoss = {loss}')
+
+plt.plot(history.history['accuracy'], label = 'Train accuracy')
+plt.plot(history.history['val_accuracy'], label = 'val accuracy')
+plt.xlabel('Epochs')
+plt.ylabel('Accuracy')
+plt.legend(loc = 'best')
+
+plt.plot(history.history['loss'], label = 'Train Loss')
+plt.plot(history.history['val_loss'], label = 'Val Loss')
+plt.xlabel('Epochs')
+plt.ylabel('Loss')
+plt.legend(loc = 'best')
